@@ -1,0 +1,351 @@
+
+{% autoescape false %}
+var default_additional_service_options = JSON.parse('{{ app['default_additional_service_options'] }}' || '{}');
+{% endautoescape %}
+var select2Opt = {minimumResultsForSearch: -1, dropdownAutoWidth: false, width: '100%', placeholder: { id: "-1", text: ""}},
+    select2OptForSettings = select2Opt,
+    service_is_unavailable = {};
+select2OptForSettings['selectOnClose'] = false;
+
+var conf = {
+    form: '#form_',
+    lang : '{{ app.js_validator_language }}',
+    showHelpOnFocus : true,
+    validateHiddenInputs: true,
+    ignore: ['.ignore'],
+    modules: 'jsconf',
+    onSuccess: function () {
+        $(conf.form).get(0).submit();
+        return true;
+    },
+    onError: function () {
+        return false;
+    }
+};
+
+function DemoSelect2() {
+    $('#form_service_type, #form_type, #service_options_select').select2(select2Opt);
+}
+
+function yelp() {
+    $(document).ready(function () {
+        $.validate(conf);
+        $( "#form_price" ).spinner({step: 0.01, numberFormat: "C", min: 0, value: $( "#form_price" ).val()});
+        LoadSelect2Script(DemoSelect2);
+        $('head').append('<link href="{{ app.request_context.baseUrl }}/plugins/multiselect_transfer/style.css" type="text/css" rel="stylesheet" />');
+
+        $(document).on('change', '#form_external_id', function (e) {
+            var _this = $(this);
+            ajaxPostSend('{{app.request_context.baseUrl}}/{{app.controller_alias}}/check-external-id', {externalid: _this.val(), selfid: $('#form_id').val()}, false);
+        });
+
+        $(document).on('change', '#form_all_services', function(e){
+            if (typeof(this.checked) && this.checked){
+                $('#form_disabled_services').attr('disabled', 'disabled');
+                $('#form_services').attr('disabled', 'disabled');
+                $('#form_services').closest('fieldset').find('button').attr('disabled', 'disabled').closest('.form-group').hide();
+            } else{
+                $('#form_disabled_services').removeAttr('disabled');
+                $('#form_services').removeAttr('disabled');
+                $('#form_services').closest('fieldset').find('button').removeAttr('disabled').closest('.form-group').show();
+            }
+        });
+
+        if ($('#form_all_services').val() == 1){
+            $('#form_all_services').attr('checked', 'checked');
+            $('#form_all_services').trigger('change');
+        }
+
+        writeServiceOptionsData($('#form_type').val());
+
+        $(document).on('change', '#form_service_type', function(eventObj){
+            var type = $(this).val();
+
+            if (type == 'single'){
+                $('#form_rent_duration').closest('.form-group').show();
+                $('#form_price').closest('.form-group').show();
+            } else {
+                $('#form_rent_duration').closest('.form-group').hide();
+                $('#form_price').closest('.form-group').hide();
+            }
+        });
+
+        if ($('#form_service_type option:selected').length == 0 || !$('#form_service_type option:selected').val()){
+            $('#form_service_type option[value="periodic"]').attr('selected', 'selected');
+        }
+        $('#form_service_type').trigger('change');
+
+        $(document).on('change', '#form_type', function(eventObj){
+
+            var type = $(this).val();
+
+            if (type == 'module' || type == ''){
+                $('#form_all_services').attr('disabled', 'disabled').closest('.form-group').hide();
+            }else{
+                $('#form_all_services').removeAttr('disabled').closest('.form-group').show();
+            }
+
+
+            if (type == 'video'){
+                $('#form_service_type').removeAttr('disabled').closest('.form-group').show();
+                $('#form_rent_duration').removeAttr('disabled').closest('.form-group').show();
+                $('#form_price').removeAttr('disabled').closest('.form-group').show();
+                $('#form_service_type').trigger('change');
+            } else {
+                $('#form_service_type').attr('disabled', 'disabled').closest('.form-group').hide();
+                $('#form_rent_duration').attr('disabled', 'disabled').closest('.form-group').hide();
+                $('#form_price').attr('disabled', 'disabled').closest('.form-group').hide();
+            }
+
+            loadTypeOptions(type);
+
+            $('#form_services').empty();
+
+            if (type != 0){
+                ajaxPostSend('{{app.request_context.baseUrl}}/{{app.controller_alias}}/get-services', {type: type}, false);
+            }
+        });
+
+        if ($('#form_type option:selected').length == 0){
+            $('#form_type option[value="tv"]').attr('selected', 'selected');
+        }
+        $('#form_type').trigger('change');
+
+        $('#form_disabled_services, #form_services').find('option[value="0"]').remove();
+
+        $(document).on('click', '#form_save', function(e){
+            var sendData =[];
+            $('#form_disabled_services option').each(function(index, val){
+                var _val = $(this).val();
+                if (_val) {
+                    sendData.push(_val);
+                }
+            });
+            $('#form_disabled_services').empty().append("<option value='0' selected='selected'></option>");
+            $('#form_disabled_services_json').val(JSON.stringify(sendData));
+
+            var sendData =[], type = $("#form_type").val(), servicesOption = {};
+            servicesOption[type] = {}
+            $('#form_services option').each(function(index, val){
+                var _val = $(this).val();
+                if (_val) {
+                    sendData.push(_val);
+                    servicesOption[type][_val] = $(this).data('option');
+                }
+            });
+
+
+            $("#form_service_options_json").val(JSON.stringify(servicesOption));
+
+            $('#form_services').empty().append("<option value='0' selected='selected'></option>");
+            $('#form_services_json').val(JSON.stringify(sendData));
+
+            e.stopPropagation();
+            e.preventDefault();
+
+            if ($(conf.form).isValid({}, conf, true)) {
+                conf.onSuccess();
+            } else {
+                conf.onError();
+            }
+            return false;
+        });
+
+        $(document).on('change', "#form_services", function (e) {
+            $("#service_options").hide();
+            $("#setting_links a").remove();
+            if ($("#service_options").children().length != 0) {
+                var selected = $("option:selected", this).length,
+                    defOpts = default_additional_service_options[$("#form_type").val()] || {},
+                    setVal = {}, missing = {};
+                if (defOpts.settings_link) {
+                    $.template("settings_link_tmpl", defOpts.settings_link);
+                }
+                var settings_link_tmpl = defOpts.settings_link ? defOpts.settings_link : null;
+                $("option:selected", this).each(function () {
+                    var service_status = $(this).attr('data-service_status') ? '' + $(this).data('service_status') : false;
+                    var options = JSON.parse($(this).data('option') || '{}'), setOpt;
+                    for (var defOpt in defOpts) {
+                        if (service_status) {
+                            if (service_status !== '1' && defOpts[defOpt].settings_link) {
+                                $.tmpl(defOpts[defOpt].settings_link, {
+                                    id: $(this).val(),
+                                    name: $(this).text()
+                                }).appendTo("#setting_links");
+                                continue;
+                            }
+                        }
+                        if (typeof (setVal[defOpt]) == 'undefined') {
+                            setVal[defOpt] = []
+                        }
+                        setOpt = (typeof (options[defOpt]) != 'undefined') ? options[defOpt] : null;
+                        if (setVal[defOpt].indexOf(setOpt) == -1) {
+                            setVal[defOpt].push(setOpt);
+                        }
+                    }
+                });
+                for (var defOpt in defOpts) {
+                    if (setVal[defOpt] && setVal[defOpt].length) {
+                        if (setVal[defOpt].length <= 1) {
+                            $("#opt_" + defOpt).removeAttr('multiple');
+                        } else if (!$("#opt_" + defOpt).attr('multiple')) {
+                            $("#opt_" + defOpt).attr('multiple', 'multiple');
+                        }
+                        $("#opt_" + defOpt).val(setVal[defOpt] || [])/*.trigger('change')*/;
+                        s2rebuild($("#opt_" + defOpt));
+                    } else {
+                        $("#opt_" + defOpt).hide();
+                    }
+                }
+                setTimeout(function () {
+                    $("#service_options").show();
+                }, 100);
+            }
+        });
+
+        $(document).on('hide', "#service_options", function(e){
+            $('select',this).prop('multiple', 'multiple');
+            $('select', this).each(function(){
+                if ($.isFunction($(this).select2) && $(this).data('select2')) {
+                    $(this).trigger('close').select2('destroy');
+                }
+            });
+        });
+        $(document).on('click', function(e){
+            if ($("#form_services").has(e.target).length || $("#service_options").has(e.target).length) {
+                return true;
+            }
+            if ($('#service_options').is(':visible')) {
+                $('#service_options').hide();
+            }
+        });
+
+    });
+}
+document.addEventListener("DOMContentLoaded", yelp, false);
+
+var updateService = function (data){
+    if (typeof (data.services) !== 'undefined') {
+        $('#form_disabled_services').empty();
+        var disabled_services_json = $("#form_disabled_services_json").val() ? JSON.parse($("#form_disabled_services_json").val()) : new Array();
+        for (var key in disabled_services_json) {
+            if (!isNaN(parseInt(disabled_services_json[key], 10))) {
+                disabled_services_json[key] = parseInt(disabled_services_json[key], 10);
+            } else {
+
+            }
+        }
+
+        var oldtype = $('#form_type').data('currtype');
+        $.template( "serviceOptionItem", '<option class="new" value="${id}" {{ "{{if status }}" }}data-service_status="${status}"{{ "{{/if}}" }}>${name}{{ "{{if external }}" }} (external){{ "{{/if}}" }}{{ "{{if launcher }}" }} (launcher){{ "{{/if}}" }}</option>' );
+        $.each(data.services, function(index, item){
+            var id = !isNaN(parseInt(item.id, 10)) ? parseInt(item.id, 10) : item.id;
+            var fieldID = '#form_services';
+            if (oldtype != data.type || disabled_services_json.indexOf(id) !== -1 || !$("#form_disabled_services_json").val()) {
+                fieldID = '#form_disabled_services';
+            }
+            $.each(['status', 'external', 'launcher'], function(){
+                if (typeof (item[this]) !== 'undefined' ) {
+                    item[this] += '';
+                } else {
+                    item[this] = false;
+                }
+            });
+            $.tmpl( "serviceOptionItem", item ).appendTo( fieldID);
+        });
+        writeServiceOptionsData($('#form_type').val());
+    }
+
+    $('#form_type').data('currtype', data.type);
+
+    if ($('#form_all_services:checked').length){
+        $('#form_disabled_services').attr('disabled', 'disabled');
+        $('#form_services').attr('disabled', 'disabled');
+    }
+};
+
+var loadTypeOptions = function(type){
+    $("#service_options").hide();
+    $("#service_options").empty();
+    if (default_additional_service_options && default_additional_service_options[type]) {
+        $.template( "optionItem", '<option value="${opt_val}">{{ "{{if opt_label }}" }}${opt_label}{{ "{{else}}" }}&nbsp;{{ "{{/if}}" }}</option>' );
+        var opt_block = default_additional_service_options[type], s2Instance;
+        for (var opt in opt_block) {
+            $("#option_row_tmpl").tmpl({name: opt, label: opt_block[opt].label}).appendTo($('#service_options'));
+            $.tmpl( "optionItem", opt_block[opt].values ).appendTo( "#opt_" + opt );
+        }
+    }
+};
+
+var writeServiceOptionsData = function(type){
+    var currSettings = JSON.parse($("#form_service_options_json").val() || '{}');
+    if (currSettings[type]) {
+        $('#form_services option').each(function(){
+            if (currSettings  && currSettings[type][$(this).val()]) {
+                $(this).data('option', currSettings[type][$(this).val()]);
+            } else {
+                $(this).removeData('option');
+            }
+        });
+    }
+    loadTypeOptions(type);
+};
+
+function s2rebuild(jqS2){
+    var s2Instance;
+    if ($.isFunction(jqS2.select2)) {
+        if (jqS2.data('select2')) {
+            jqS2.select2("destroy");
+        }
+        setTimeout(function () {
+            s2Instance = jqS2.select2(select2OptForSettings);
+            s2Instance.on('select2:selecting select2:unselecting', select2Selecting);
+            s2Instance.on('select2:closing', select2Closing);
+        });
+        return s2Instance;
+    }
+    return jqS2;
+}
+
+var select2Selecting = function (e) {
+    if ($(this).attr('multiple')) {
+        $('option', this).removeAttr('selected');
+
+        if (e.params.args.data.element) {
+            $(e.params.args.data.element).prop('selected', 'selected');
+        }
+
+        $(this).removeAttr('multiple');
+        return s2rebuild($(this));
+    }
+    return $(this);
+};
+
+var select2Closing = function(e){
+    var timeStamp = $(e.target).data('timestamp') || 0;
+    if (timeStamp == e.timeStamp) {
+        return;
+    }
+
+    if ($('option:selected', e.target).length == 1) {
+        $(e.target).data('timestamp', e.timeStamp);
+        var writeData = {}, optName = $(e.target).attr('id').replace('opt_', '');
+        writeData[optName] = $('option:selected:first', e.target).val();
+
+        $('#form_services option:selected').each(function(){
+            var service_status = $(this).attr('data-service_status') ? '' + $(this).data('service_status') : false;
+            if (service_status && service_status === '0') {
+                return true;
+            }
+            var currentData = JSON.parse($(this).data('option') || '{}');
+            var finallyData = {};
+            Object.assign(finallyData, currentData, writeData);
+            for(var key in finallyData){
+                if (finallyData[key] == '') {
+                    delete(finallyData[key]);
+                }
+            }
+            $(this).data('option', JSON.stringify(finallyData));
+        });
+    }
+}

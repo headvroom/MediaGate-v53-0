@@ -1,0 +1,524 @@
+
+        var actionFlag = false, channel_id = {{ attribute(app, 'channel_id') is defined ? app.channel_id: 'false' }};
+
+        var channelList = [];
+
+        var conf = {
+            form: '#form_',
+            lang : '{{ app.js_validator_language }}',
+            showHelpOnFocus : true,
+            validateHiddenInputs: true,
+            ignore: ['.ignore'],
+            modules: 'jsconf',
+            onSuccess: function () {
+                showModalBox();
+                $('#channelListContainer').empty().delay(1000).promise().done(function(){
+                    var sendData = {};
+                    $("#channel_begin, #channel_end").each(function(){
+                        var val = parseInt($.trim($(this).val()));
+                        sendData[$(this).attr('name')] = !isNaN(val) ? val: '';
+                    });
+                    if ((sendData.channel_end - sendData.channel_begin) > 200 ) {
+                        customConfirm(sendData);
+                    } else {
+                        ajaxPostSend('{{ app.request_context.baseUrl ~ '/' ~ app.controller_alias  ~ '/' }}move-channel-list-json', sendData, false, false, true);
+                    }
+                });
+                return false;
+            },
+            onError: function () {
+                return false;
+            }
+        };
+
+        function yelp() {
+            $(document).ready(function () {
+
+                // Add custom validation rule
+                var customRuleObj = {
+                    name : 'compare_number',
+                    errorMessage : "",
+                    errorMessageKey: 'badCompareNumber',
+                    errorMsgContainer: $("#channel_num_error")
+                };
+
+                customRuleObj.validatorFunction = function(value, el, config, language, form) {
+                    var compElem = $(el).data('validation-compare-element');
+                    var compOperation = $(el).data('validation-compare-operation') ? $(el).data('validation-compare-operation') : "<=";
+                    var compElemValidationOptional = $(compElem).data('validation-optional') || false;
+                    var compRange = $(compElem).data('validation-allowing') || false;
+                    var val = parseFloat($(el).val());
+                    var compVal = parseFloat($(compElem).val());
+                    this.errorMsgContainer.text('').removeClass('has-error');
+
+                    if (compElem && !$(compElem).is(":disabled") && !isNaN(val) && !isNaN(compVal)) {
+                        if (!$(compElem).val() && compElemValidationOptional) {
+                            return true;
+                        }
+
+                        if ((compOperation == '<=' && !(val <= compVal)) || (compOperation == '>=' && !(val >= compVal))) {
+                            this.errorMsgContainer.html("<span class='help-block form-error'>{{ 'End channel number can not be less than the start channel number'|trans }}</span>").addClass('has-error');
+                            return false;
+                        }
+                    }
+                    return true;
+                };
+
+                $.formUtils.addValidator(customRuleObj);
+
+                $.validate(conf);
+                $(document).on('click', "a.main_ajax", function (e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    $("#modalbox").data('complete', 0);
+                    var sendData = $(this).data();
+                    ajaxPostSend($(this).attr('href'), sendData, false, false);
+                    return false;
+                });
+
+                $(document).on('click', '#iptv_list_move_send', function(e){
+                    e.stopPropagation();
+                    e.preventDefault();
+                    var dataForSend = checkChanges(true);
+                    showModalBox();
+                    ajaxPostSend('{{ app['controller_alias'] }}/move-apply', {data: dataForSend});
+                    $("#modalbox").data('complete', 1);
+                    return false;
+                });
+
+                $(document).on('keyup', "#searc_and_backlight input[type='text']", function(e){
+                    if (typeof(e) != 'undefined' && typeof(e.type) != 'undefined' && e.type=='keyup' && e.keyCode == 13) {
+                        setBackLightFocus();
+                        return true;
+                    }
+                    $("#channelListContainer .box").removeClass('shining');
+                    var search = $(this).val();
+                    if ($.trim(search) != ''){
+                        $.each(['\\', '[',']','<','>','=','+','*','?','|','(',')','$','.','&', '{', '}'], function(i, val){
+                            search = search.replace(val, "\\" + val);
+                        });
+                        
+                        $("#channelListContainer .box").each(function(){
+                            var searchRegExp = new RegExp(search, "gi");
+                            if (searchRegExp.test($(this).find('.curr_num').text()) || searchRegExp.test($(this).find('.channel').text())) {
+                                $(this).find('.channel').addClass('backlight');
+                            } else {
+                                $(this).find('.channel').removeClass('backlight');
+                            }
+                        })
+                    } else {
+                        $("#channelListContainer .backlight").removeClass('backlight');
+                    }
+                });
+                
+                $(document).on('click', "#searc_and_backlight button", function(e){
+                    e.stopPropagation();
+                    e.preventDefault();
+                    setBackLightFocus();
+                    return false;
+                });
+
+                $('#channelListContainer').on('click', 'a.lock-link', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var childI = $(this).children('i');
+                    var offset = channelList[channelList.length - 1].old_number - channelList.length;
+                    var childID = parseInt($(this).closest('.box').find('span.curr_num').data('number'), 10) - 1 - offset;
+                    if (childI.hasClass('fa-lock')) {
+                        childI.removeClass('fa-lock').addClass('fa-unlock').attr('title',"{{ 'Lock channel position'|trans }}");
+                        $(this).closest("div.box").removeClass('sortable-disabled').addClass('sortable-enabled');
+                        channelList[childID].locked = false;
+                    } else {
+                        childI.removeClass('fa-unlock').addClass('fa-lock').attr('title',"{{ 'Unlock channel position'|trans }}");
+                        $(this).closest("div.box").addClass('sortable-disabled').removeClass('sortable-enabled');
+                        channelList[childID].locked = true;
+                    }
+                    ajaxPostSend('{{ app['controller_alias'] }}/toogle-lock-channel', {data:{1: {id: childI.data('id'), locked: channelList[childID].locked, number: channelList[childID].number} } });
+                    initListItemsPosition($(this).closest('.droptrue'));
+                    $("#modalbox").data('complete', 1);
+                    return false;
+                });
+
+                $('#channelListContainer').on('click', 'a.remove-link', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    var offset = channelList[channelList.length - 1].old_number - channelList.length;
+                    var childID = parseInt($(this).closest('.box').find('span.curr_num').data('number'), 10) - 1 - offset;
+
+                    var sendData = {channel_begin: channelList[channelList.length - 1].old_number + 1, channel_end: channelList[channelList.length - 1].old_number + 1, oneitem: childID};
+                    $(document).queue('moveQueue', function(){
+                        actionFlag = true;
+                        console.log(sendData);
+                        ajaxPostSend('{{ app.request_context.baseUrl ~ '/' ~ app.controller_alias  ~ '/' }}move-channel-list-json', sendData, false, false, false);
+                    });
+                    if (!actionFlag && $(document).queue('moveQueue').length == 1) {
+                        $(document).dequeue('moveQueue');
+                    }
+
+                    return false;
+                });
+
+                $('#channelListContainer').on('click', 'a.counter-add-link', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    var offset = channelList[channelList.length - 1].old_number - channelList.length,
+                        currList = $(this).closest('div.counter').next('div.ui-sortable'),
+                        emptyBlockList = currList,
+                        emptyBlock = $(emptyBlockList.find('div.box.sortable-enabled:not(.empty)').get(0));
+                    while(!emptyBlock || !emptyBlock.hasClass('empty')){
+                        if (emptyBlock.next().length) {
+                            emptyBlock = emptyBlock.next();
+                        } else {
+                            if (emptyBlockList.parent('div').next('div').length != 0) {
+                                emptyBlockList = emptyBlockList.parent('div').next('div').children('div.ui-sortable');
+                            } else {
+                                emptyBlock = $('#channelListContainer div.ui-sortable:last div.box.sortable-enabled:last');
+                                break;
+                            }
+                        }
+                    }
+                    var lastBlockNum = $('span[data-number]', emptyBlock).data('number') - 1 - offset,
+                        lastChannel = channelList[lastBlockNum],
+                        addItem = {
+                            link: '',
+                            number: lastChannel.number,
+                            old_number: lastChannel.old_number,
+                            changed: true,
+                            notempty: '0',
+                            empty: 'empty',
+                            notlocked: '1',
+                            locked: 'sortable-enabled',
+                            instance: undefined
+                        },
+                        start_num = $(this).closest('div.counter').next('div.ui-sortable').children('div.box.sortable-enabled:not(.empty)').find('span[data-number]').data('number');
+                    if (typeof (start_num) == 'undefined') {
+                        start_num = $(this).data('fromnumber');
+                    }
+                    $(document).queue('moveQueue', function() {
+                        actionFlag = true;
+                        $.ajax({
+                            url: '{{ app.request_context.baseUrl ~ '/' ~ app.controller_alias  ~ '/' }}move-channel-move-number',
+                            type: 'POST',
+                            data: {start_num: start_num, direction: 1},
+                            success: function (data) {
+                                addItem.instance = $("#list_item").tmpl(addItem).prependTo(currList);
+                                lastChannel.instance.remove();
+                                channelList[lastBlockNum] = addItem;
+
+
+                                $('#channelListContainer').delay(10).promise()
+                                    .done(function() {sortAndMove(currList, -1);})
+                                    .done(function () {
+                                        $('div.ui-sortable', this).each(function () {
+                                            initListItemsPosition(this);
+                                        });
+                                    })
+                                    .done(function() {checkQueue();});
+                            },
+                            error: function (data) {
+                                if (data.readyState == 4 || data.status != 0) {
+                                    if (typeof(data.nothing_to_do) != 'undefined' && data.nothing_to_do) {
+                                        JScloseModalBox();
+                                    } else {
+                                        ajaxError(data);
+                                    }
+                                }
+                                checkQueue();
+                            },
+                            timeout: 0,
+                            dataType: "json",
+                            async: false
+                        });
+                    });
+                    if (!actionFlag && $(document).queue('moveQueue').length == 1) {
+                        $(document).dequeue('moveQueue');
+                    }
+                    return false;
+                });
+
+                $(document).on('click', '#iptv_list_move_show', function(e){
+                    e.stopPropagation();
+                    e.preventDefault();
+
+                    if ($(conf.form).isValid({}, conf, true)) {
+                        conf.onSuccess();
+                    } else {
+                        conf.onError();
+                    }
+                    return false;
+
+
+                });
+
+                $( document ).on('show', "div.droptrue",function(e){
+                    $(this).sortable({
+                        connectWith: "div.droptrue",
+                        cancel: ".sortable-disabled",
+                        items: '.sortable-enabled',
+                        create: function(){
+                            initListItemsPosition(this);
+                        },
+                        stop: function( event, ui ) {
+                            var sourceList = $(event.target),
+                                destList = $(ui.item).closest('.ui-sortable'),
+                                sourceNum = sourceList.data('blocknum'),
+                                destNum = destList.data('blocknum'),
+                                forward = sourceNum <= destNum ? 1 : -1;
+
+                            sortAndMove(destList, forward);
+                        }
+                    });
+                    $(this).disableSelection();
+                });
+
+                // initial list load
+                conf.onSuccess();
+
+            });
+        }
+
+        document.addEventListener( "DOMContentLoaded", yelp, false );
+
+        function setBackLightFocus(){
+            var first = $("#channelListContainer .box .backlight").get(0);
+            if (!$(first).closest('.box').hasClass('shining')) {
+                $(first).closest('.box').addClass('shining')
+                $('#channelListContainer').scrollTo($(first).closest('.box'), 'slow');
+                return;
+            }
+            $("#channelListContainer .box .backlight").each(function(index){
+                var parent = $(this).closest('.box');
+                if (index == 0 || parent.hasClass('shining')) {
+                    return true;
+                } else if (index == $("#channelListContainer .box .backlight").length - 1){
+                    $("#channelListContainer .box").removeClass('shining');
+                    $('#channelListContainer').scrollTo(parent, 'slow');
+                    return false;
+                }
+
+                $('#channelListContainer').scrollTo(parent, 'slow');
+                parent.addClass('shining');
+                return false;
+            });
+        }
+
+        function channelListRender(container){
+
+            var _container = $(container);
+            _container.empty();
+            var maxBlockHeight = $(window).height()- _container.offset().top - 50;
+            _container.height(maxBlockHeight);
+            //maxBlockHeight -= $(document).height() - $(window).height();
+            _container.height(maxBlockHeight - 40);
+            var maxBlockWidth = $(window).width()- _container.offset().left - 50;
+            _container.width(maxBlockWidth+10);
+            var maxItemOnBlock = Math.floor(maxBlockHeight/50);
+            var currentCount = 0;
+            for (var i= 0; i< channelList.length; ) {
+                var currentBlock = $("<div/>", {'class': 'no-padding'}).appendTo(_container);
+                currentBlock.hide();
+                var currentItemsBlock = $("<div/>", {'class': 'no-padding droptrue'}).appendTo(currentBlock);
+                currentItemsBlock.hide();
+                for ( var j = currentCount; j < (currentCount + maxItemOnBlock) && j < channelList.length; j++) {
+                    if (typeof(channelList[j]) == 'undefined') {
+                        continue;
+                    }
+                    var item = channelList[j];
+                    item['notempty'] = item['empty'] ? '0': '1';
+                    item['empty'] = item['empty'] ? 'empty' : '';
+                    item['notlocked'] = item['locked'] ? '0': '1';
+                    item['locked'] = item['locked'] ? 'sortable-disabled' : 'sortable-enabled';
+                    item['relocating'] = channel_id !== false && item['id'] == channel_id;
+                        channelList[j]['instance'] = $("#list_item").tmpl(item).appendTo(currentItemsBlock);
+                    i++;
+                }
+
+                $("#list_counter").tmpl({from: channelList[currentCount].number, to: channelList[j - 1].number}).prependTo(currentBlock);
+                currentCount = j;
+                currentBlock.css('top', 0);
+                currentBlock.css('left', (Math.ceil(currentCount/maxItemOnBlock) - 1)*250);
+                currentBlock.show();
+                currentItemsBlock.data('blocknum', channelList[currentCount - 1].number);
+                currentItemsBlock.show();
+                if (j >= channelList.length) {
+                    break;
+                }
+            }
+            if ($('.relocating').length != 0) {
+                $('#channelListContainer').scrollTo($('.relocating'));
+            }
+        }
+
+        function sortAndMove(source, direction, items){
+            var totalLength = $(source).data('itemscount'),
+                fixedPos = JSON.parse($(source).data('fixedPos') || '{}'),
+                addItems = items || [], lItem, newNum, currNum;
+            if (Object.keys(fixedPos).length) {
+                $('.sortable-disabled', source).detach().each(function(){
+                    index = $(this).data('pos');
+                    if (typeof (fixedPos[index]) != 'undefined') {
+                        fixedPos[index] = $(this);
+                    }
+                });
+            }
+            var other = [];
+            if (direction > 0 ) {
+                other = $('div.box', source).detach().toArray().concat(addItems);
+            } else {
+                other = addItems.concat($('div.box', source).detach().toArray());
+            }
+
+            var offset = channelList[channelList.length - 1].old_number - channelList.length;
+
+            for(var i = (direction > 0 ? totalLength - 1 : 0 ); (direction > 0 ? i >= 0: i < totalLength); i-=direction){
+                if (typeof (fixedPos[i]) != 'undefined' || (i == (direction > 0 ? 0 : totalLength - 1) && Object.keys(fixedPos).length == 1 )) {
+                    $(fixedPos[i])[direction > 0 ? 'prependTo': 'appendTo'](source);
+                    delete(fixedPos[i]);
+                } else {
+                    lItem = other[direction > 0 ? 'pop': 'shift']();
+                    currNum = parseInt($('span[data-number]', lItem).data('number'), 10) - 1 - offset;
+                    newNum = parseInt($(source).data('blocknum'), 10) - totalLength + i - offset;
+
+                    channelList[currNum]['number'] = newNum + 1 + offset;
+                    $('span[data-number]', lItem).text(channelList[currNum]['number']);
+
+                    $(lItem)[direction > 0 ? 'prependTo': 'appendTo'](source);
+                }
+            }
+            if (other.length != 0) {
+                source = source.parent('div')[[direction < 0 ? 'next': 'prev']]('div').children('.ui-sortable');
+                sortAndMove(source, direction, other);
+            }
+            $(source).sortable( "refresh" );
+
+        }
+
+        function channelDataPrepare(data){
+            if (data && data.data) {
+                for (var i in data.data) {
+                    data.data[i].link = data.data[i].id ? '{{ app.request_context.baseUrl ~ '/' ~ app.controller_alias  ~ '/' }}edit-channel?id=' + data.data[i].id: '';
+                    data.data[i].old_number = data.data[i].number;
+                    data.data[i].changed = false;
+                }
+                channelList = data.data;
+            }
+            channelListRender('#channelListContainer');
+        }
+
+        function initListItemsPosition(sourceList){
+            var fixedPos = {};
+            $(sourceList).children('div.box:not(.ui-sortable-placeholder)').each(function(i){
+                var $this = $(this);
+                if ($this.hasClass('sortable-disabled')) {
+                    $this.data('pos', i);
+                    fixedPos[i] = 0;
+                }
+            });
+            $(sourceList).data('itemscount', $('div.box:not(.ui-sortable-placeholder)', sourceList).length);
+            $(sourceList).data('fixedPos', JSON.stringify(fixedPos));
+        }
+
+        function showModalBox(){
+            notty('<span>{{ 'Request is being processed'|trans }}...</span>','notification');
+        }
+        
+        var manageChannel = function (obj) {
+            notty('<span>{{ 'Done'|trans }}!</span>','success');
+        };
+        
+        var manageChannelError = function(data){
+            if (typeof(data.nothing_to_do) == 'undefined' || !data.nothing_to_do) {
+                notty('<span>{{ 'Error'|trans }}! ' + (data.error ? data.error : '') + '</span>', 'error');
+            }
+        };
+        
+        var checkChanges = function(getData){
+            var dataForSend = new Array(),
+                getData = getData || false;
+
+            $.each(channelList, function(){
+                if ((this.number != this.old_number || this.changed) && !this.empty) {
+                    dataForSend.push({'id': this.id, 'number': this.number, 'old_number': this.old_number});
+                    if (getData) {
+                        this.old_number = this.number;
+                    }
+                }
+            });
+
+            return getData? dataForSend : dataForSend.length > 0;
+        };
+
+        function customConfirm(sendData){
+            $("#modalbox .modal-header-name").html("{{ 'Warning'|trans }}");
+            $("#modalbox .devoops-modal-inner").html("\n\
+            <div class='col-md-12'>\n\
+                <span class='col-md-12 txt-default'>\n\
+                    {{ 'Attention! Processing list of more than 200 elements can greatly affect the performance and usability of this section of the admin panel. Are you sure you want to continue?'|trans }}\n\
+                </span>\n\
+            </div>");
+            if ($("#modalbox .devoops-modal-bottom button").length == 0) {
+                $("#modalbox .devoops-modal-bottom").append($("#modal_form_buttons").html());
+            }
+
+            $("#modalbox .devoops-modal-bottom").on('click', "button[type='button']", function(e){
+                ajaxPostSend('{{ app.request_context.baseUrl ~ '/' ~ app.controller_alias  ~ '/' }}move-channel-list-json', sendData, false, false, false);
+                JScloseModalBox();
+            });
+
+            $("#modalbox").show();
+        }
+
+        function appendToEnd(data) {
+            if (data.oneitem && channelList[data.oneitem]) {
+                var addItem  = data.data[0],
+                    start_num = channelList[data.oneitem].old_number;
+
+                addItem.link = addItem.id ? '{{ app.request_context.baseUrl ~ '/' ~ app.controller_alias  ~ '/' }}edit-channel?id=' + addItem.id: '';
+                addItem.number = channelList[data.oneitem].number;
+                addItem.old_number = channelList[data.oneitem].old_number;
+                addItem.changed = true;
+
+                addItem['notempty'] = addItem['empty'] ? '0': '1';
+                addItem['empty'] = addItem['empty'] ? 'empty' : '';
+                addItem['notlocked'] = addItem['locked'] ? '0': '1';
+                addItem['locked'] = addItem['locked'] ? 'sortable-disabled' : 'sortable-enabled';
+
+                addItem['instance'] = $("#list_item").tmpl(addItem).appendTo($('#channelListContainer div.ui-sortable:last'));
+
+                channelList[data.oneitem].instance.remove();
+                channelList[data.oneitem] = addItem;
+                ajaxPostSend('{{ app.request_context.baseUrl ~ '/' ~ app.controller_alias  ~ '/' }}move-channel-move-number', {start_num: start_num, direction: -1});
+            }
+
+            $('#channelListContainer').delay(10).promise()
+                .done(function() {
+                    sortAndMove($('#channelListContainer div.ui-sortable:last'), 1);
+                })
+                .done(function() {
+                    $('div.ui-sortable', this).each(function(){
+                        initListItemsPosition(this);
+                    });
+                })
+                .done(function() {checkQueue();});
+        }
+
+        window.onunload = function(){
+            if (checkChanges()) {
+                return "{{ 'You have unsaved data. Really want to go?'|trans }}";
+            }
+        }; 
+            
+        window.onbeforeunload = function(){
+            if (checkChanges()) {
+                return "{{ 'You have unsaved data. Really want to go?'|trans }}";
+            }
+        };
+
+        function checkQueue(){
+            actionFlag = false;
+            if ($(document).queue('moveQueue').length > 0) {
+                $(document).dequeue('moveQueue');
+            }
+        }

@@ -1,0 +1,47 @@
+{% extends app['twig_theme'] ~ '/' ~ 'layout.twig' %}
+{% import  app['twig_theme'] ~ '/macro/iptw_macro.twig' as main_macro %}
+
+{% set active = 'settings' %}
+{% set title = 'Settings'|trans ~ ': ' ~ 'appearance'|trans %}
+
+
+{% block footer %}
+    {{ parent() }}
+
+    <script type="text/javascript" defer>
+       
+        {% include (app.twig_theme ~ "/Settings/themes/themes.js.twig") %}
+
+    </script>
+{% endblock %}
+
+
+{% block content %}
+    <div id="iptv_list">
+        <div class="row row_no_padding">
+            {% if attribute(app, 'allData') is defined %}
+                {% for row in app['allData'] %}
+                    <div class="col-xs-4 col-sm-4 "><h4>{{ row['title'] }}</h4>
+                        <div class="col-sm-12 simple_gallery no-padding">
+                            {% if attribute(row, 'previews') is defined %}
+                                {% for key, preview in row['previews'] %}
+                                    <div class="col-xs-12 col-sm-12">
+                                        <a class="fancybox" rel="theme_{{ row['name'] }}" href="{{ preview }}" title="{{ row['title'] }} {{ key + 1 }}">
+                                            <img src="{{ preview }}" alt=""/>
+                                        </a>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                        <div class="col-xs-12 col-sm-12 pull-right no-padding">
+                            <div class="col-xs-12 col-sm-12 pull-right">
+                                <button data-href="{{ app.request_context.baseUrl }}/{{ app.controller_alias }}/set-current-theme" data-themename="{{ row['name'] }}" class="pull-right main_ajax btn btn-{% if row['name'] == app['current_theme']['name'] %}yaly" disabled="disabled">{{ 'Current'|trans }}{% else %}yal">{{ 'Apply'|trans }}{% endif %}</button>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+
+{% endblock %}

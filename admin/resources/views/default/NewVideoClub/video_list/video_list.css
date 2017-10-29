@@ -1,0 +1,33 @@
+
+
+.dataTable i.fa-circle {
+    color: #424242;
+    font-size: 9px;
+}
+
+.dataTable i.fa-calendar,
+.dataTable i.fa-eye,
+.dataTable i.fa-eye-slash {
+    font-size: 17px;
+
+}
+.dataTable i.fa-calendar,
+.dataTable i.fa-eye-slash {
+    color: #aaa;
+
+}
+.dataTable i.fa-eye {
+    color: #525252;
+}
+
+.dt-status .monitoring-status {
+	margin-left: 2px;
+}
+
+html[lang=en] div.dt-button-collection {
+    width: 109px;
+}
+
+html[lang=ru] div.dt-button-collection {
+    width: 119px;
+}

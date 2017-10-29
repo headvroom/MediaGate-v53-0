@@ -1,0 +1,102 @@
+{% extends app['twig_theme'] ~ '/' ~ 'layout.twig' %}
+{% set active = 'activation-codes' %}
+{% set title = 'Activation codes'|trans ~ ': ' ~ 'About Activation codes'|trans %}
+
+{% block head %}
+    
+    {{ parent() }}
+    <style type="text/css">
+         {% include (app.twig_theme ~ "/ActivationCodes/about_activation_codes/about_activation_codes.css") %}
+    </style>
+
+{% endblock %}
+
+{% block content %}
+    <div id="activation_codes_first">
+        <div class="row">
+            <div class="box">
+                <div class="box-content">
+                    <div class="box-content no-padding">
+                        
+                        <h3>{{"Broadcast content on any device" |trans }}</h3>
+
+                        <img class="main-image" src="{{app.request_context.baseUrl}}/img/activation-codes/ac-main.png" alt="">
+                        
+                        <p>{{"Owners of practically any device can become subscribers to your service." |trans }}</p>
+                        <p>{{"Now you can connect to Stalker Middleware with the most popular media players and smart TVs." |trans }}</p>
+                        <p>{{"This was made possible thanks to the release of Stalker Player, an easy-to-use application for viewing TV and video content that is available on an increasing number of platforms." |trans }}</p>
+                        <p>
+                            {{"The application can be downloaded for free, but its full functionality requires an Activation Code." |trans }}<br>
+                            {{"An Activation Code is a unique set of symbols that is entered as authorization along with a login, password and link to the operator’s portal." |trans }}
+                        </p>
+                        
+
+                        <div class="block-bordered block-wheretobuy">
+							
+                            <h5>{{ "Codes are purchased through" |trans ~ ":" }}</h5>
+                            
+                            <div class="link-box">
+                                <a href="//www.infomir.eu/{% if attribute(app, 'language') is defined and app['language'] == "ru" %}rus/{% else %}eng/{% endif %}payments/" target="_blank">
+                                    <img src="{{app.request_context.baseUrl}}/img/activation-codes/ac-www.png" alt=""><br>
+                                    infomir.eu/pay
+                                </a>
+                            </div>
+
+                            <div class="link-box">
+                                <a href="//www.infomir.eu/{% if attribute(app, 'language') is defined and app['language'] == "ru" %}rus/{% else %}eng/{% endif %}payments/" target="_blank">
+                                    <img src="{{app.request_context.baseUrl}}/img/activation-codes/ac-IM.png" alt=""><br>
+                                    {{ "sales department" |trans }}
+                                </a>
+                            </div>
+
+                        </div>
+
+                        
+                        <div class="block-bordered block-anyquestions">
+
+                            <h5>{{ "Have any additional questions" |trans ~ "?" }}</h5>
+                            
+                            <div class="link-box">
+                                <a href="mailto:stalker@infomir.com">
+                                    <img src="{{app.request_context.baseUrl}}/img/activation-codes/ac-email.png" alt=""><br>
+                                    stalker@infomir.com
+                                </a>
+                            </div>
+
+                        </div>
+                        <div class="clearfix"></div>
+
+
+
+                        <h3>{{ "Which devices are supported?" |trans }}</h3>
+                        
+                        <div class="block-block clearfix">
+                                <img class="picture-device" src="{{app.request_context.baseUrl}}/img/activation-codes/ac-device-1.png" alt="">
+                                <h4>{{ "Infomir MAG Set-Top Boxes" |trans }}</h4>
+                                <p>{{ "Set-Top Boxes produced by Infomir on Linux or Android operating systems already contain everything needed to connect to Stalker Middleware and Activation Codes are not needed." |trans }}</p>
+                        </div>
+                        
+                        <div class="block-block clearfix">
+                                <img class="picture-device" src="{{app.request_context.baseUrl}}/img/activation-codes/ac-device-2.png" alt="">
+                                <h4>{{ "Applications for Android and iOS from Infomir" |trans }}</h4>
+                                <p>{{ "Official StalkerTV applications for Apple TV, Android TV, iPad, iPhone, iPod touch, Android phones & tablets, and Android STB can be purchased in their respective app stores, no activation codes are required." |trans }}</p>
+                        </div>
+                        
+                        <div class="block-block clearfix">
+                                <img class="picture-device" src="{{app.request_context.baseUrl}}/img/activation-codes/ac-device-3.png" alt="">
+                                <h4>{{ "Applications for media players and SMART TVs" |trans }}</h4>
+                                <p>{{ "Stalker Player applications for Amazon Fire TV and Roku media players, and Samsung Smart, Samsung Tizen, and LG WebOS smart TVs, can be downloaded and installed for free from app stores, but the subscriber will need an Activation Code." |trans }}</p>
+                        </div>
+
+                        <div class="text-center button-block">
+                                <a href="//www.infomir.eu/{% if attribute(app, 'language') is defined and app['language'] == "ru" %}rus/{% else %}eng/{% endif %}payments/" target="_blank"
+                                    class="btn btn-success">{{ "Purchase an Activation Code" |trans }}</a>
+                        </div> 
+ 
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
